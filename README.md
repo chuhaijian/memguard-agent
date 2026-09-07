@@ -7,6 +7,7 @@
 MemGuard 是一套**叠加在 [AgentSight](https://github.com/eunomia-bpf/agentsight) 之上的扩展改动层（overlay）**，在 Agent 写入长期记忆（向量库 / SQLite 记忆库 / 会话摘要文件）的瞬间，于内核态完成投毒特征检测并触发告警，对 Agent 本身零侵入。
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
+[![CI](https://github.com/chuhaijian/memguard-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chuhaijian/memguard-agent/actions/workflows/ci.yml)
 
 ---
 
@@ -71,7 +72,7 @@ LLM Agent 的长期记忆存在一类隐蔽攻击面：**记忆投毒（Memory P
 | 操作系统 | Linux，内核 ≥ 5.8（需 BTF：`/sys/kernel/btf/vmlinux`，支持 CO-RE） |
 | 权限 | root 或 `CAP_BPF` + `CAP_PERFMON` |
 | 工具链 | clang/LLVM ≥ 12、libbpf、rustup（stable，实测 1.98） |
-| 上游依赖 | [eunomia-bpf/agentsight](https://github.com/eunomia-bpf/agentsight) v1.0.30 |
+| 上游依赖 | [eunomia-bpf/agentsight](https://github.com/eunomia-bpf/agentsight) v1.0.31（CI 锁定 commit `bb99b66f8f98`） |
 
 ```bash
 apt install clang-14 llvm-14 libelf-dev zlib1g-dev libssl-dev pkg-config
@@ -82,22 +83,24 @@ apt install clang-14 llvm-14 libelf-dev zlib1g-dev libssl-dev pkg-config
 本仓库 `overlay/` 目录下的文件**已按上游仓库的相对路径组织**，可直接整体覆盖到克隆的 AgentSight 源码树：
 
 ```bash
-# 1. 获取上游源码（请使用 v1.0.30 标签）
-git clone https://github.com/eunomia-bpf/agentsight.git
-cd agentsight && git checkout v1.0.30
+# 1. 获取上游源码并切到 CI 锁定的版本（含 BPF 子模块）
+git clone --recurse-submodules https://github.com/eunomia-bpf/agentsight.git
+cd agentsight && git checkout bb99b66f8f98
 
 # 2. 叠加本仓库改动（保持相对路径一致，可直接 cp）
 cp -R /path/to/memguard-agent/overlay/* ./
 
-# 或使用提供的脚本（含路径校验，推荐）
+# 或使用提供的脚本（含落点校验，推荐）
 /path/to/memguard-agent/scripts/apply-overlay.sh /path/to/agentsight
 
-# 3. 编译探针与采集器
-cd bpf && make memwrite && cd -
-cd collector && cargo build --release
+# 3. 编译上游探针与采集器
+cd bpf && make          # 编译 sslsniff/process/stdiocap 等内置探针
+cd ../collector && cargo build --release
 ```
 
-> `overlay/` 的目录结构严格对应 AgentSight 源码树（`bpf/`、`analysis/src/`、`collector/src/`、`agentsight-capture/src/`、`ext/analysis/src/`、`deploy/systemd/`），因此 `cp -R overlay/* ./` 不会错位。如需逐项校验落点，见 `scripts/apply-overlay.sh`。
+> `memwrite.bpf.c` 是 MemGuard 新增的探针（不在上游 `bpf/Makefile` 的默认 `APPS` 内），
+> 由 agent 通过 `--memwrite-path` 在运行时加载；如需随上游一并编译，将其加入 `bpf/Makefile` 的 `APPS` 后 `make memwrite`。
+> `overlay/` 的目录结构严格对应 AgentSight 源码树（`bpf/`、`collector/src/`、`agentsight-capture/src/`、`ext/analysis/src/`、`deploy/systemd/`），因此 `cp -R overlay/* ./` 不会错位。如需逐项校验落点，见 `scripts/apply-overlay.sh`。
 
 ### 4.3 运行
 
@@ -160,12 +163,11 @@ systemctl restart memguard
 
 ```
 memguard-agent/
-├── overlay/                    # 叠加到 AgentSight v1.0.30 的改动层（路径与上游一一对应）
+├── overlay/                    # 叠加到 AgentSight v1.0.31 的改动层（路径与上游一一对应）
 │   ├── bpf/                    #   memwrite.bpf.c / .c / .h —— eBPF 探针内核态逻辑 + libbpf loader
-│   ├── analysis/src/           #   poison.rs（PoisonAnalyzer）+ alert_sink.rs（AlertSink）
 │   ├── collector/src/          #   CLI 接线（main.rs / cmd_trace.rs）
 │   ├── agentsight-capture/src/runners/  # BinaryRunner 构造器（common.rs）
-│   ├── ext/analysis/src/analyzers/      # analyzer 注册（mod.rs / poison.rs）
+│   ├── ext/analysis/src/analyzers/      # analyzer 注册（mod.rs）+ poison.rs（PoisonAnalyzer）+ alert_sink.rs（AlertSink）
 │   └── deploy/systemd/         #   常驻服务三件套（memguard.service / .env.example / run-memguard.sh）
 ├── scripts/apply-overlay.sh   # 将 overlay/ 叠加到 AgentSight 的权威脚本（含落点校验）
 ├── docs/design.md              # 技术设计与实测记录
