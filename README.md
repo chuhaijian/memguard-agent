@@ -72,7 +72,7 @@ LLM Agent 的长期记忆存在一类隐蔽攻击面：**记忆投毒（Memory P
 | 操作系统 | Linux，内核 ≥ 5.8（需 BTF：`/sys/kernel/btf/vmlinux`，支持 CO-RE） |
 | 权限 | root 或 `CAP_BPF` + `CAP_PERFMON` |
 | 工具链 | clang/LLVM ≥ 12、libbpf、rustup（stable，实测 1.98） |
-| 上游依赖 | [eunomia-bpf/agentsight](https://github.com/eunomia-bpf/agentsight) v1.0.31（CI 锁定 commit `bb99b66f8f98`） |
+| 上游依赖 | [eunomia-bpf/agentsight](https://github.com/eunomia-bpf/agentsight) v1.0.31（CI 锁定 tag `v1.0.31`） |
 
 ```bash
 apt install clang-14 llvm-14 libelf-dev zlib1g-dev libssl-dev pkg-config
@@ -85,7 +85,7 @@ apt install clang-14 llvm-14 libelf-dev zlib1g-dev libssl-dev pkg-config
 ```bash
 # 1. 获取上游源码并切到 CI 锁定的版本（含 BPF 子模块）
 git clone --recurse-submodules https://github.com/eunomia-bpf/agentsight.git
-cd agentsight && git checkout bb99b66f8f98
+cd agentsight && git checkout v1.0.31
 
 # 2. 叠加本仓库改动（保持相对路径一致，可直接 cp）
 cp -R /path/to/memguard-agent/overlay/* ./
