@@ -6,7 +6,7 @@
 #   scripts/apply-overlay.sh <AGENTSIGHT_SRC_DIR>
 #
 # 约定:
-#   - 目标目录须为 eunomia-bpf/agentsight v1.0.30 的源码根（含 bpf/ analysis/ collector/ 等）。
+#   - 目标目录须为 eunomia-bpf/agentsight 的源码根（建议与 CI 中 AGENTSIGHT_REF 锁定的版本一致）。
 #   - overlay/ 内的相对路径与上游一一对应，本脚本逐文件复制并打印落点，便于人工复核。
 #   - 默认 dry-run（仅打印），加 --apply 才真正写入。
 #
@@ -33,13 +33,12 @@ MAP=(
   "bpf/memwrite.bpf.c:bpf/memwrite.bpf.c"
   "bpf/memwrite.c:bpf/memwrite.c"
   "bpf/memwrite.h:bpf/memwrite.h"
-  "analysis/src/poison.rs:analysis/src/poison.rs"
-  "analysis/src/alert_sink.rs:analysis/src/alert_sink.rs"
   "collector/src/cmd_trace.rs:collector/src/cmd_trace.rs"
   "collector/src/main.rs:collector/src/main.rs"
   "agentsight-capture/src/runners/common.rs:agentsight-capture/src/runners/common.rs"
   "ext/analysis/src/analyzers/mod.rs:ext/analysis/src/analyzers/mod.rs"
   "ext/analysis/src/analyzers/poison.rs:ext/analysis/src/analyzers/poison.rs"
+  "ext/analysis/src/analyzers/alert_sink.rs:ext/analysis/src/analyzers/alert_sink.rs"
   "deploy/systemd/memguard.service:deploy/systemd/memguard.service"
   "deploy/systemd/memguard.env.example:deploy/systemd/memguard.env.example"
   "deploy/systemd/run-memguard.sh:deploy/systemd/run-memguard.sh"
