@@ -52,20 +52,37 @@ const _CRITICAL_SEVERITY_THRESHOLD: usize = 3;
 pub struct PoisonAnalyzer {
     /// Memory-store filename prefix this analyzer watches (for the fs
     /// compensation path, we only re-read files whose name contains it).
+    /// May be a comma-separated list of prefixes.
     prefix: String,
+    /// Signatures to match. Defaults to POISON_SIGNATURES when empty.
+    rules: Vec<String>,
 }
 
 impl PoisonAnalyzer {
     pub fn new(prefix: &str) -> Self {
         Self {
             prefix: prefix.to_string(),
+            rules: POISON_SIGNATURES.iter().map(|s| s.to_string()).collect(),
         }
     }
 
+    /// Set external signatures (from --poison-rules). Empty => defaults.
+    pub fn with_rules(mut self, rules: Vec<String>) -> Self {
+        let cleaned: Vec<String> = rules
+            .into_iter()
+            .map(|r| r.trim().to_string())
+            .filter(|r| !r.is_empty() && !r.starts_with('#'))
+            .collect();
+        if !cleaned.is_empty() {
+            self.rules = cleaned;
+        }
+        self
+    }
+
     /// Scan the kernel-captured head/tail windows for signatures.
-    fn scan_windows(head: Option<&str>, tail: Option<&str>) -> Vec<String> {
+    fn scan_windows(head: Option<&str>, tail: Option<&str>, sigs: &[String]) -> Vec<String> {
         let mut matched: Vec<String> = Vec::new();
-        for sig in POISON_SIGNATURES {
+        for sig in sigs {
             let needle = sig.to_lowercase();
             let hit = head
                 .map(|h| h.to_lowercase().contains(&needle))
@@ -74,7 +91,7 @@ impl PoisonAnalyzer {
                     .map(|t| t.to_lowercase().contains(&needle))
                     .unwrap_or(false);
             if hit {
-                matched.push(sig.to_string());
+                matched.push(sig.clone());
             }
         }
         matched
@@ -83,7 +100,7 @@ impl PoisonAnalyzer {
     /// Filesystem compensation: re-read the written byte range and scan it.
     /// The write is a full SQLite page, so the poison cell is inside it.
     /// Bounds the read to 4 MiB to stay cheap on huge stores.
-    async fn scan_file_range(path: &str, offset: u64, count: u64) -> Vec<String> {
+    async fn scan_file_range(path: &str, offset: u64, count: u64, sigs: &[String]) -> Vec<String> {
         const MAX_SCAN: u64 = 4 * 1024 * 1024;
         let Ok(data) = tokio::fs::read(path).await else {
             return Vec::new();
@@ -98,9 +115,9 @@ impl PoisonAnalyzer {
         }
         let chunk = String::from_utf8_lossy(&data[start..end]).to_lowercase();
         let mut matched: Vec<String> = Vec::new();
-        for sig in POISON_SIGNATURES {
+        for sig in sigs {
             if chunk.contains(&sig.to_lowercase()) {
-                matched.push(sig.to_string());
+                matched.push(sig.clone());
             }
         }
         matched
@@ -122,8 +139,12 @@ impl Analyzer for PoisonAnalyzer {
         stream: EventStream,
     ) -> Result<EventStream, Box<dyn std::error::Error + Send + Sync>> {
         let prefix = self.prefix.clone();
+        let sigs = self.rules.clone();
+        let path_matches = self.prefix.split(',').map(|s| s.to_string()).collect::<Vec<_>>();
         let scanned = stream.filter_map(move |mut ev| {
             let prefix = prefix.clone();
+            let path_matches = path_matches.clone();
+            let sigs = sigs.clone();
             async move {
                 // Only memwrite MEM_WRITE events carry a memory-store write.
                 let is_mem_write = ev.source == "memwrite"
@@ -134,7 +155,7 @@ impl Analyzer for PoisonAnalyzer {
 
                 let head = ev.data.get("head").and_then(|v| v.as_str());
                 let tail = ev.data.get("tail").and_then(|v| v.as_str());
-                let mut matched = PoisonAnalyzer::scan_windows(head, tail);
+                let mut matched = PoisonAnalyzer::scan_windows(head, tail, &sigs);
 
                 // Window miss -> filesystem compensation on the written range.
                 if matched.is_empty() {
@@ -143,9 +164,11 @@ impl Analyzer for PoisonAnalyzer {
                         ev.data.get("offset").and_then(|v| v.as_u64()),
                         ev.data.get("count").and_then(|v| v.as_u64()),
                     ) {
-                        if prefix.is_empty() || path.contains(&prefix) {
+                        if prefix.is_empty()
+                            || path_matches.iter().any(|p| path.contains(p))
+                        {
                             matched =
-                                PoisonAnalyzer::scan_file_range(path, offset, count).await;
+                                PoisonAnalyzer::scan_file_range(path, offset, count, &sigs).await;
                         }
                     }
                 }
