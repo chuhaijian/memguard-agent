@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 最小权限原则：CI 只读取代码，不写回仓库
+permissions:
+  contents: read
+
+env:
+  # AgentSight 版本锁定：overlay 基于该 commit 推导，升级需同步验证叠加与编译。
+  # 当前 = master @ v1.0.31（2026-09-05）。
+  AGENTSIGHT_REF: "bb99b66f8f98"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── Job 1: 脱敏扫描 ───────────────────────────────────────────────
+  # 防止内部信息 / 密钥意外进入公开仓库。任何命中即失败（红）。
+  sanitize:
+    name: Sanitize — no secrets / internal info
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for leaked secrets / internal references
+        run: |
+          set -euo pipefail
+          patterns=(
+            '43\.153' 'kqvfhpsiq' 'ghp_' 'sshpass'
+            '<local-path>' '\<local-toolchain>' 'server-src' '授权确认'
+            'yardfribley' '/opt/agentsight' '<owner>' '<owner>'
+          )
+          leaks=0
+          while IFS= read -r f; do
+            for p in "${patterns[@]}"; do
+              if grep -rInEq "$p" "$f"; then
+                echo "::error file=$f::leaked pattern: $p"
+                leaks=1
+              fi
+            done
+          done < <(git ls-files | grep -v '^\.github/')
+          if [ "$leaks" -ne 0 ]; then
+            echo "::error::Sanitization failed — internal/secret info detected"
+            exit 1
+          fi
+          echo "sanitize: clean"
+
+  # ── Job 2: 叠加 overlay 到真实上游并编译验证 ──────────────────────
+  # 在 macOS 上跑 cargo check：capture-core 的 build.rs 在非 Linux 平台跳过 BPF
+  # 编译（无需 clang / libbpf 子模块），可干净验证全部 Rust 改动能编译通过。
+  # 说明：eBPF 探针（memwrite.bpf.c）本身的内核态编译在 Linux 构建机上人工验证，
+  #       不在本 CI 自动编译范围内（上游 BPF 构建依赖 git 子模块）。
+  verify-overlay:
+    name: Apply overlay & cargo check (AgentSight ${{ env.AGENTSIGHT_REF }})
+    runs-on: macos-latest
+    needs: sanitize
+    steps:
+      - name: Checkout MemGuard
+        uses: actions/checkout@v4
+        with:
+          path: memguard-agent
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            agentsight/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('memguard-agent/overlay/**/*.rs', 'memguard-agent/overlay/**/*.toml') }}
+
+      - name: Clone AgentSight @ pinned ref
+        run: |
+          git clone --depth 1 https://github.com/eunomia-bpf/agentsight.git agentsight
+          cd agentsight
+          git fetch --depth 1 origin "$AGENTSIGHT_REF"
+          git checkout "$AGENTSIGHT_REF"
+          echo "AgentSight HEAD: $(git rev-parse --short HEAD)"
+
+      - name: Apply MemGuard overlay
+        run: bash memguard-agent/scripts/apply-overlay.sh "$(pwd)/agentsight" --apply
+
+      # collector 依赖 agentsight-analysis（我们的 poison/alert_sink 改动）
+      # 与 agentsight-capture-core（我们的 runners/common.rs 改动），
+      # 一次 cargo check 覆盖全部被改动 crate；非 Linux 平台跳过 BPF 编译。
+      - name: cargo check (collector → pulls agentsight-analysis + capture-core)
+        working-directory: agentsight/collector
+        run: cargo check
