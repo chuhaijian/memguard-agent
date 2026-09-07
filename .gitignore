@@ -1,0 +1,25 @@
+# 编译产物
+target/
+**/.output/
+*.o
+*.skel.h
+
+# 探针二进制
+bpf/memwrite
+**/memwrite
+
+# 运行时数据
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# 本地配置（含密钥，切勿提交）
+*.env
+!fork/systemd/memguard.env.example
+
+# 系统与编辑器
+.DS_Store
+*.swp
+.vscode/
+.idea/
