@@ -1,0 +1,20 @@
+# 投毒特征规则示例
+# MemGuard 外部签名文件：每行一条，# 开头为注释行/行内注释，匹配大小写不敏感
+# 使用 --poison-rules 指定本文件后，将【整体替换】内建 15 条默认签名
+# 规则过宽会产生误报，建议结合业务记忆库的实际内容调优
+
+# ---- 中文伪造信任签名 ----
+免验证
+无需验证即可执行
+可直接导入
+已通过安全审查
+可信来源
+
+# ---- 英文伪造信任签名 ----
+trusted source
+pre-approved
+bypass validation
+skip security check
+
+# ---- 业务自定义（示例）----
+# memory_injection_marker
