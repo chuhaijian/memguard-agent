@@ -3,7 +3,7 @@
 > 基于 eunomia-bpf/agentsight v1.0.30 (master) 源码研读
 > 目标：在 AgentSight 的工程底座上，实现 LLM Agent 长期记忆投毒检测（FARMA/MINJA）
 
-## 一、为什么 fork 它而不是全自研
+## 一、为什么基于 AgentSight 扩展而非全自研
 
 | 能力 | AgentSight 现状 | 我们要补的 |
 |---|---|---|
