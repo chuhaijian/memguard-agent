@@ -1,6 +1,6 @@
 # MemGuard 技术设计与实现方案
 
-> 基于 eunomia-bpf/agentsight v1.0.30 (master) 源码研读
+> 基于 eunomia-bpf/agentsight master（v1.0.31，commit `bb99b66f8f98`）源码研读
 > 目标：在 AgentSight 的工程底座上，实现 LLM Agent 长期记忆投毒检测（FARMA/MINJA）
 
 ## 一、为什么基于 AgentSight 扩展而非全自研
