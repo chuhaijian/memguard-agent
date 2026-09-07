@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 # 最小权限原则：CI 只读取代码，不写回仓库
 permissions:
@@ -19,6 +20,7 @@ env:
 jobs:
   # ── Job 1: 脱敏扫描 ───────────────────────────────────────────────
   # 防止内部信息 / 密钥意外进入公开仓库。任何命中即失败（红）。
+  # 注意：扫描模式本身包含这些关键词，因此本工作流文件（.github/）被排除在扫描之外。
   sanitize:
     name: Sanitize — no secrets / internal info
     runs-on: ubuntu-latest
@@ -29,8 +31,8 @@ jobs:
           set -euo pipefail
           patterns=(
             '43\.153' 'kqvfhpsiq' 'ghp_' 'sshpass'
-            '<local-path>' '\<local-toolchain>' 'server-src' '授权确认'
-            'yardfribley' '/opt/agentsight' '<owner>' '<owner>'
+            '/Users/jatsmith' '\.workbuddy' 'server-src' '授权确认'
+            'yardfribley' '/root/agentsight' 'jatsmith91-debug' 'tajleonbennis'
           )
           leaks=0
           while IFS= read -r f; do
