@@ -12,9 +12,9 @@ permissions:
   contents: read
 
 env:
-  # AgentSight 版本锁定：overlay 基于该 commit 推导，升级需同步验证叠加与编译。
-  # 当前 = master @ v1.0.31（2026-09-05）。
-  AGENTSIGHT_REF: "bb99b66f8f98"
+  # AgentSight 版本锁定：overlay 基于该 tag 推导，升级需同步验证叠加与编译。
+  # v1.0.31 即 master @ 2026-09-05（commit bb99b66f8f98）。
+  AGENTSIGHT_REF: "v1.0.31"
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -78,9 +78,8 @@ jobs:
 
       - name: Clone AgentSight @ pinned ref
         run: |
-          git clone --depth 1 https://github.com/eunomia-bpf/agentsight.git agentsight
+          git clone --depth 1 --branch "$AGENTSIGHT_REF" https://github.com/eunomia-bpf/agentsight.git agentsight
           cd agentsight
-          git fetch --depth 1 origin "$AGENTSIGHT_REF"
           git checkout "$AGENTSIGHT_REF"
           echo "AgentSight HEAD: $(git rev-parse --short HEAD)"
 
