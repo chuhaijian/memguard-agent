@@ -55,7 +55,7 @@ jobs:
   # 说明：eBPF 探针（memwrite.bpf.c）本身的内核态编译在 Linux 构建机上人工验证，
   #       不在本 CI 自动编译范围内（上游 BPF 构建依赖 git 子模块）。
   verify-overlay:
-    name: Apply overlay & cargo check (AgentSight ${{ env.AGENTSIGHT_REF }})
+    name: "Apply overlay & cargo check (AgentSight v1.0.31)"
     runs-on: macos-latest
     needs: sanitize
     steps:
